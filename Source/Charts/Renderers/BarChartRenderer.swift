@@ -449,6 +449,8 @@ open class BarChartRenderer: BarLineScatterCandleBubbleRenderer
 
         for (barIndex, barRect) in buffer.rects.enumerated()
         {
+            context.saveGState()
+            defer { context.restoreGState() }
             guard viewPortHandler.isInBoundsLeft(barRect.maxX) else { continue }
             guard viewPortHandler.isInBoundsRight(barRect.minX) else { break }
 

@@ -410,7 +410,7 @@ open class BarChartRenderer: BarLineScatterCandleBubbleRenderer
     private func drawGradientBars(context: CGContext, dataSet: IBarChartDataSet, dateSetIndex index: Int, buffer: BarChartRenderer.Buffer, matrix: CGAffineTransform)
     {
 
-        guard let gradientPositions = dataSet.gradientPositions else
+        guard var gradientLocations = dataSet.gradientPositions else
         {
             assertionFailure("Must set `gradientPositions if `dataSet.drawBarGradientEnabled` is true")
             return
@@ -421,36 +421,12 @@ open class BarChartRenderer: BarLineScatterCandleBubbleRenderer
 
         let drawBorder = dataSet.barBorderWidth > 0
 
-        let gradientStart = dataSet.gradientEnd.isInfinite ?
-            CGPoint(x: boundingBox.minX, y: boundingBox.minY) :
-            dataSet.gradientEnd.applying(matrix)
-
-        let gradientEnd = dataSet.gradientStart.isInfinite ?
-            CGPoint(x: boundingBox.minX, y: boundingBox.maxY) :
-            dataSet.gradientStart.applying(matrix)
-
+        let isStacked = dataSet.isStacked
         var gradientColorComponents: [CGFloat] = []
-        var gradientLocations: [CGFloat] = []
 
-        for position in gradientPositions.reversed()
-        {
-            let location = CGPoint(x: boundingBox.minX, y: position)
-                .applying(matrix)
-            let normalizedLocation =
-                (location.y - boundingBox.minY) / (boundingBox.maxY - boundingBox.minY)
-            switch normalizedLocation {
-            case ..<0:
-                gradientLocations.append(0)
-            case 0..<1:
-                gradientLocations.append(normalizedLocation)
-            case 1...:
-                gradientLocations.append(1)
-            default:
-                assertionFailure()
-            }
-        }
-
-        for color in dataSet.colors.reversed()
+        var colors = dataSet.colors
+        let lastColor = isStacked ? colors.removeLast() : colors.last ?? .white
+        for color in colors.reversed()
         {
             guard let (r, g, b, a) = color.nsuirgba else {
                 continue
@@ -468,21 +444,29 @@ open class BarChartRenderer: BarLineScatterCandleBubbleRenderer
         }
 
         // In case the chart is stacked, we need to accomodate individual bars within accessibilityOrdereredElements
-        let isStacked = dataSet.isStacked
+
         let stackSize = isStacked ? dataSet.stackSize : 1
 
         for (barIndex, barRect) in buffer.rects.enumerated()
         {
-            context.saveGState()
-            defer { context.restoreGState() }
-
             guard viewPortHandler.isInBoundsLeft(barRect.maxX) else { continue }
             guard viewPortHandler.isInBoundsRight(barRect.minX) else { break }
 
             context.beginPath()
             context.addRect(barRect)
             context.clip()
-            context.drawLinearGradient(gradient, start: gradientStart, end: gradientEnd, options: [])
+
+            if isStacked, barIndex % 2 != 0 {
+                context.setFillColor(lastColor.cgColor)
+                context.fill(barRect)
+            } else {
+                context.drawLinearGradient(
+                    gradient,
+                    start: .zero,
+                    end: .init(x: 0, y: barRect.maxY),
+                    options: []
+                )
+            }
 
             if drawBorder
             {
@@ -506,6 +490,7 @@ open class BarChartRenderer: BarLineScatterCandleBubbleRenderer
                 accessibilityOrderedElements[barIndex/stackSize].append(element)
             }
         }
+        context.restoreGState()
     }
 
     private func drawNormalBars(context: CGContext, dataSet: IBarChartDataSet, dateSetIndex index: Int, buffer: BarChartRenderer.Buffer)

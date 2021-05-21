@@ -130,31 +130,46 @@ open class YAxisRenderer: AxisRendererBase
         fixedPosition: CGFloat,
         positions: [CGPoint],
         offset: CGFloat,
-        textAlign: NSTextAlignment)
-    {
+        textAlign: NSTextAlignment
+    ) {
         guard
             let yAxis = self.axis as? YAxis
             else { return }
-        
+
         let labelFont = yAxis.labelFont
         let labelTextColor = yAxis.labelTextColor
-        
+
         let from = yAxis.isDrawBottomYLabelEntryEnabled ? 0 : 1
         let to = yAxis.isDrawTopYLabelEntryEnabled ? yAxis.entryCount : (yAxis.entryCount - 1)
-        
-        let xOffset = yAxis.labelXOffset
-        
+
+        let attributes: [NSAttributedString.Key : Any] = [.font: labelFont, .foregroundColor: labelTextColor]
         for i in stride(from: from, to: to, by: 1)
         {
             let text = yAxis.getFormattedLabel(i)
-            
+
             ChartUtils.drawText(
                 context: context,
                 text: text,
-                point: CGPoint(x: fixedPosition + xOffset, y: positions[i].y + offset),
+                point: CGPoint(x: fixedPosition, y: positions[i].y + offset),
                 align: textAlign,
-                attributes: [.font: labelFont, .foregroundColor: labelTextColor]
+                attributes: attributes
             )
+        }
+
+
+        for line in yAxis.limitLines {
+            guard !line.drawLabelEnabled, let transformer = transformer else { return }
+
+            let point = transformer.pixelForValues(x: 0.0, y: line.limit)
+            let size = line.label.size(withAttributes: attributes)
+            let labelPoint = CGPoint(x: size.width / 2.0, y: point.y - (size.height / 2))
+
+            NSUIGraphicsPushContext(context)
+
+            line.label.draw(at: labelPoint,withAttributes: attributes)
+            line.lineColor.setFill()
+
+            NSUIGraphicsPopContext()
         }
     }
     
